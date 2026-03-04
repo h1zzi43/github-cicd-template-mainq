@@ -1,3 +1,15 @@
+## v0.1.4 (2026-03-04)
+
+### Изменения:
+- Merge pull request #6 from h1zzi43/master
+
+### Детали PR:
+- **Номер:** #7
+- **Название:** Merge pull request #6 from h1zzi43/master
+- **Автор:** @h1zzi43
+
+---
+
 ## v0.1.3 (2026-03-04)
 
 ### Изменения:
