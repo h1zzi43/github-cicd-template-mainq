@@ -7,8 +7,8 @@ on:
     branches: [main, master]
 
 permissions:
-  contents: read
-  pull-requests: read
+  contents: write
+  pull-requests: write
 
 jobs:
   telegram-notify:
