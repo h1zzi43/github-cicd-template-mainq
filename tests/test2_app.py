@@ -1,10 +1,10 @@
 def test_example():
-    """Пример теста1"""
+    """Пример теста"""
     assert True
 
 def test_addition():
     """Еще один тест"""
-    assert 1 + 1 == 2
+    assert 1 + 2 == 3
 
 def test_string():
     """Тест строки"""
