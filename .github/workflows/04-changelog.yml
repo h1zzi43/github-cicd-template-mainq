@@ -5,15 +5,14 @@ on:
     branches: [main, master]
     types: [closed]
 
-# ИСПРАВЛЕНО: Добавлены все необходимые права
 permissions:
   contents: write
   pull-requests: write
-  issues: write   # <--- Добавлено для меток
+  issues: write
 
 jobs:
   generate-changelog:
-    name: "Генерация changelog"
+    name: "📝 Генерация changelog"
     runs-on: ubuntu-latest
     if: github.event.pull_request.merged == true
     outputs:
@@ -24,98 +23,169 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Get version
+      - name: "📋 Получение информации о PR"
+        run: |
+          echo "═══════════════════════════════════════════"
+          echo "📝 ГЕНЕРАЦИЯ CHANGELOG"
+          echo "═══════════════════════════════════════════"
+          echo "🔀 PR #${{ github.event.pull_request.number }}: ${{ github.event.pull_request.title }}"
+          echo "👤 Автор: ${{ github.event.pull_request.user.login }}"
+
+      - name: "🔍 Получение версии"
         id: get_version
         run: |
           if [ -f VERSION ]; then
             VERSION=$(cat VERSION)
+            echo "✅ Версия из VERSION файла: v$VERSION"
           else
             VERSION="0.1.0"
+            echo "⚠️ VERSION файл не найден, используем v$VERSION"
           fi
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
-      - name: Get commit messages
+      - name: "📊 Анализ коммитов"
         id: commits
         run: |
-          COMMITS=$(git log ${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }} --pretty=format:"- %s" | head -20)
-          # Экранируем для безопасного использования в echo
-          COMMITS="${COMMITS//'%'/'%25'}"
-          COMMITS="${COMMITS//$'\n'/'%0A'}"
-          COMMITS="${COMMITS//$'\r'/'%0D'}"
-          echo "commits=$COMMITS" >> $GITHUB_OUTPUT
+          echo "═══════════════════════════════════════════"
+          echo "📊 КОММИТЫ В ЭТОМ PR"
+          echo "═══════════════════════════════════════════"
+          
+          echo "📋 Список изменений:"
+          echo "────────────────────────────────"
+          
+          COMMITS=$(git log ${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }} --pretty=format:"- %s")
+          echo "$COMMITS" | while read commit; do
+            echo "  $commit"
+          done
+          
+          echo "────────────────────────────────"
+          
+          # Экранируем для безопасного использования
+          COMMITS_ESCAPED="${COMMITS//'%'/'%25'}"
+          COMMITS_ESCAPED="${COMMITS_ESCAPED//$'\n'/'%0A'}"
+          COMMITS_ESCAPED="${COMMITS_ESCAPED//$'\r'/'%0D'}"
+          echo "commits=$COMMITS_ESCAPED" >> $GITHUB_OUTPUT
 
-      - name: Create changelog entry
+      - name: "📄 Создание записи в changelog"
         run: |
           DATE=$(date +%Y-%m-%d)
           VERSION="${{ steps.get_version.outputs.version }}"
-          echo "## v$VERSION ($DATE)" > new_changelog.md
-          echo "" >> new_changelog.md
-          echo "### Изменения:" >> new_changelog.md
           
-          # Декодируем коммиты обратно
-          echo -e "${{ steps.commits.outputs.commits }}" >> new_changelog.md
+          # Создаем новую запись
+          cat > new_changelog.md << EOF
+          ## v$VERSION ($DATE)
+
+          ### Изменения:
+          ${{ steps.commits.outputs.commits }}
+
+          ### Детали PR:
+          - **Номер:** #${{ github.event.pull_request.number }}
+          - **Название:** ${{ github.event.pull_request.title }}
+          - **Автор:** @${{ github.event.pull_request.user.login }}
+
+          ---
+
+          EOF
           
-          echo "" >> new_changelog.md
-          echo "---" >> new_changelog.md
-          echo "" >> new_changelog.md
+          # Добавляем существующий changelog если есть
           if [ -f changelog.md ]; then
             cat changelog.md >> new_changelog.md
           fi
+          
           mv new_changelog.md changelog.md
+          echo "✅ Changelog обновлен"
 
-      - name: Commit changelog
+      - name: "🔄 Pull latest changes"
         run: |
+          echo "═══════════════════════════════════════════"
+          echo "🔄 СИНХРОНИЗАЦИЯ С УДАЛЕННЫМ РЕПОЗИТОРИЕМ"
+          echo "═══════════════════════════════════════════"
+          
           git config --global user.name 'GitHub Actions'
           git config --global user.email 'actions@github.com'
-          git add changelog.md
-          git commit -m "docs: update changelog for v${{ steps.get_version.outputs.version }}" || echo "No changes"
-          git push
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          
+          # Сохраняем текущие изменения
+          git stash || true
+          
+          # Получаем последние изменения
+          echo "📥 Получение последних изменений из remote..."
+          git pull --rebase origin master || git pull --rebase origin main
+          
+          # Возвращаем изменения
+          git stash pop || true
+          
+          echo "✅ Репозиторий синхронизирован"
 
-      - name: Save changelog as artifact
+      - name: "📤 Commit and push changelog"
+        run: |
+          echo "═══════════════════════════════════════════"
+          echo "📤 ОТПРАВКА CHANGELOG В РЕПОЗИТОРИЙ"
+          echo "═══════════════════════════════════════════"
+          
+          git add changelog.md
+          
+          if git diff --staged --quiet; then
+            echo "ℹ️ Нет изменений для коммита"
+          else
+            git commit -m "📝 docs: обновление changelog для v${{ steps.get_version.outputs.version }}"
+            
+            # Пробуем push, если не получается - делаем pull и push снова
+            if git push; then
+              echo "✅ Изменения отправлены"
+            else
+              echo "⚠️ Push не удался, пробуем pull + push..."
+              git pull --rebase origin master || git pull --rebase origin main
+              git push
+              echo "✅ Изменения отправлены после синхронизации"
+            fi
+          fi
+
+      - name: "📎 Сохранение артефакта"
         uses: actions/upload-artifact@v4
         with:
-          name: changelog
+          name: changelog-v${{ steps.get_version.outputs.version }}
           path: changelog.md
           retention-days: 30
 
   add-changelog-label:
-    name: "Добавить label changelog"
+    name: "🏷️ Добавление метки changelog"
     needs: generate-changelog
     runs-on: ubuntu-latest
-    # ВАЖНО: Добавляем проверку, что PR был merged
     if: github.event.pull_request.merged == true
     steps:
-      - name: Add changelog label using GitHub Script
+      - name: "➕ Добавление метки"
         uses: actions/github-script@v7
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const labelName = 'changelog';
+            const version = '${{ needs.generate-changelog.outputs.version }}';
             
-            console.log(`Attempting to add label: ${labelName} to PR #${context.issue.number}`);
+            console.log('═══════════════════════════════════════════');
+            console.log('🏷️ ДОБАВЛЕНИЕ МЕТКИ CHANGELOG');
+            console.log('═══════════════════════════════════════════');
+            console.log(`📦 Версия: v${version}`);
             
             try {
-              // Сначала проверяем, существует ли метка
+              // Проверяем/создаём метку
               await github.rest.issues.getLabel({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 name: labelName
               }).catch(async () => {
-                // Если метка не существует, создаём её
-                console.log(`Label ${labelName} does not exist, creating...`);
+                console.log('🆕 Создание метки changelog...');
                 await github.rest.issues.createLabel({
                   owner: context.repo.owner,
                   repo: context.repo.repo,
                   name: labelName,
-                  color: 'fbca04', // Жёлтый цвет для changelog
-                  description: 'Changelog generated for this PR'
+                  color: 'fbca04',
+                  description: '📝 Changelog обновлен'
                 });
               });
               
-              // Пытаемся добавить метку к PR (даже если он закрыт)
+              // Добавляем метку к PR
               await github.rest.issues.addLabels({
                 issue_number: context.issue.number,
                 owner: context.repo.owner,
@@ -123,9 +193,9 @@ jobs:
                 labels: [labelName]
               });
               
-              console.log(`✅ Successfully added label ${labelName}`);
+              console.log(`✅ Метка ${labelName} добавлена!`);
+              console.log(`\n📄 Changelog обновлен до версии v${version}`);
+              
             } catch (error) {
-              console.log(`⚠️ Could not add label: ${error.message}`);
-              console.log('This is expected if the PR is already closed. Workflow continues.');
-              // Не проваливаем задание, если метку не удалось добавить
+              console.log(`⚠️ Ошибка при добавлении метки: ${error.message}`);
             }
