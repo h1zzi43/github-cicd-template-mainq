@@ -2,7 +2,13 @@ name: "01 - Тестирование"
 
 on:
   pull_request:
-    branches: [main, master]
+    branches: [main, master,bash]
+
+
+permissions:
+ contents: read
+ pull-requests: write
+ issues: write
 
 jobs:
   unit-tests:
