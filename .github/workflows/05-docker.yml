@@ -2,7 +2,7 @@ name: "05 - Публикация в Docker Hub"
 
 on:
   pull_request:
-    branches: [main, master]
+    branches: [main, master,dev]
     types: [closed]
 
 permissions:
