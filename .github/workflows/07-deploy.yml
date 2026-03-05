@@ -2,9 +2,12 @@ name: "07 - Деплой в PROD"
 
 on:
   workflow_run:
-    workflows: ["06 - Уведомление в Telegram"]
-    types: [completed]
-    branches: [main, master]
+    workflows: ["06 - Уведомление в Telegram"]  # ТОЧНОЕ имя как в 06 файле
+    types:
+      - completed
+    branches:
+      - main
+      - master
 
 permissions:
   contents: read
@@ -13,132 +16,108 @@ permissions:
   deployments: write
 
 jobs:
+  check-previous-status:
+    name: "🔍 Проверка статуса"
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          echo "═══════════════════════════════════════════"
+          echo "🔍 ПРОВЕРКА ПРЕДЫДУЩЕГО WORKFLOW"
+          echo "═══════════════════════════════════════════"
+          echo "📊 Статус: ${{ github.event.workflow_run.conclusion }}"
+          
+          if [ "${{ github.event.workflow_run.conclusion }}" != "success" ]; then
+            echo "❌ Предыдущий шаг не успешен"
+            exit 1
+          fi
+          echo "✅ Предыдущий шаг успешен"
+
   deploy:
     name: "🚀 Деплой в production"
+    needs: check-previous-status
     runs-on: ubuntu-latest
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
-    
     steps:
       - name: "📋 Начало деплоя"
         run: |
           echo "═══════════════════════════════════════════"
           echo "🚀 ШАГ 7: ДЕПЛОЙ В PRODUCTION"
           echo "═══════════════════════════════════════════"
-          echo "🆔 Run ID: ${{ github.event.workflow_run.id }}"
-          echo "📊 Статус предыдущего шага: ✅ Успешно"
-
+          
       - uses: actions/checkout@v4
-
+      
       - name: "📦 Получение версии"
+        id: version
         run: |
           VERSION=$(cat VERSION 2>/dev/null || echo "0.1.0")
-          echo "📦 Версия для деплоя: v$VERSION"
-          echo "VERSION=$VERSION" >> $GITHUB_ENV
-
-      - name: "🔧 Настройка окружения"
-        run: |
-          echo "🌐 Окружение: production"
-          echo "📅 Время деплоя: $(date)"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "📦 Версия: v$VERSION"
           
-          # Создаем deployment в GitHub
-          curl -X POST \
-            -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-            -H "Accept: application/vnd.github.v3+json" \
-            https://api.github.com/repos/${{ github.repository }}/deployments \
-            -d '{
-              "ref": "main",
-              "environment": "production",
-              "description": "Deploy v${{ env.VERSION }}",
-              "auto_merge": false,
-              "required_contexts": []
-            }'
-
       - name: "🚀 Симуляция деплоя"
         run: |
-          echo "═══════════════════════════════════════════"
-          echo "🚀 ЗАПУСК ДЕПЛОЯ"
-          echo "═══════════════════════════════════════════"
+          echo "📦 Деплоим версию v${{ steps.version.outputs.version }}"
           
-          # Прогресс-бар
-          echo "📦 Загрузка образа: v${{ env.VERSION }}"
-          for i in {1..5}; do
-            echo -n "🟩"
-            sleep 1
-          done
+          # Прогресс деплоя
+          echo -n "🟩"
+          sleep 1
+          echo -n "🟩"
+          sleep 1
+          echo -n "🟩"
+          sleep 1
+          echo -n "🟩"
+          sleep 1
+          echo -n "🟩"
           echo " ✅"
-          
-          echo "🔄 Остановка старых контейнеров..."
-          sleep 2
-          
-          echo "🐳 Запуск новых контейнеров..."
-          sleep 2
-          
-          echo "✅ Проверка здоровья..."
-          sleep 2
           
           echo ""
           echo "✅ ДЕПЛОЙ УСПЕШНО ЗАВЕРШЕН"
-          echo "────────────────────────────────"
-          echo "📦 Версия: v${{ env.VERSION }}"
-          echo "🌐 URL: https://${{ github.repository_owner }}.example.com"
-          echo "⏱️ Время: $(date)"
-
-  add-prod-label:
-    name: "🏷️ Добавление метки PROD"
-    needs: deploy
-    runs-on: ubuntu-latest
-    steps:
-      - name: "➕ Добавление метки"
+          echo "🌐 http://app.example.com"
+          
+      - name: "🏷️ Добавление метки PROD"
         uses: actions/github-script@v7
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const labelName = 'PROD';
             
+            // Создаем метку если нет
             try {
-              // Создаем метку если нет
               await github.rest.issues.getLabel({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 name: labelName
-              }).catch(async () => {
-                await github.rest.issues.createLabel({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  name: labelName,
-                  color: 'e99695',
-                  description: '🚀 Развернуто в production'
-                });
               });
-              
-              // Ищем последний закрытый PR
-              const { data: pulls } = await github.rest.pulls.list({
+            } catch {
+              await github.rest.issues.createLabel({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
-                state: 'closed',
-                sort: 'updated',
-                direction: 'desc',
-                per_page: 1
+                name: labelName,
+                color: 'e99695',
+                description: '🚀 В production'
               });
-              # Добавляем changelog
-              if (pulls.length > 0) {
-                await github.rest.issues.addLabels({
-                  issue_number: pulls[0].number,
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  labels: [labelName]
-                });
-                console.log(`✅ Метка ${labelName} добавлена к PR #${pulls[0].number}`);
-              }
-              
-            } catch (error) {
-              console.log(`⚠️ Ошибка: ${error.message}`);
             }
-              ### gegre
-      - name: "📊 Итог"
+            
+            // Ищем последний PR
+            const { data: pulls } = await github.rest.pulls.list({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'closed',
+              sort: 'updated',
+              direction: 'desc',
+              per_page: 1
+            });
+            
+            if (pulls.length > 0) {
+              await github.rest.issues.addLabels({
+                issue_number: pulls[0].number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                labels: [labelName]
+              });
+              console.log(`✅ Метка добавлена к PR #${pulls[0].number}`);
+            }
+            
+      - name: "✅ Завершение"
         run: |
           echo "═══════════════════════════════════════════"
           echo "✅ ШАГ 7 ЗАВЕРШЕН"
           echo "═══════════════════════════════════════════"
-          echo "📦 Версия: v${{ env.VERSION }}"
-          echo "🏷️ Метка PROD: ✅ Добавлена"
