@@ -2,96 +2,104 @@ name: "08 - Создание релиза"
 
 on:
   workflow_run:
-    workflows: ["07 - Деплой в PROD"]
-    types: [completed]
-    branches: [main, master]
+    workflows: ["07 - Деплой в PROD"]  # ТОЧНОЕ имя как в 07 файле
+    types:
+      - completed
+    branches:
+      - main
+      - master
 
 permissions:
   contents: write
   pull-requests: read
 
 jobs:
-  create-release:
-    name: "🎉 Создание GitHub Release"
+  check-previous-status:
+    name: "🔍 Проверка статуса"
     runs-on: ubuntu-latest
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
-    
+    steps:
+      - run: |
+          echo "═══════════════════════════════════════════"
+          echo "🔍 ПРОВЕРКА ПРЕДЫДУЩЕГО WORKFLOW"
+          echo "═══════════════════════════════════════════"
+          echo "📊 Статус: ${{ github.event.workflow_run.conclusion }}"
+          
+          if [ "${{ github.event.workflow_run.conclusion }}" != "success" ]; then
+            echo "❌ Предыдущий шаг не успешен"
+            exit 1
+          fi
+          echo "✅ Предыдущий шаг успешен"
+
+  create-release:
+    name: "🎉 Создание релиза"
+    needs: check-previous-status
+    runs-on: ubuntu-latest
     steps:
       - name: "📋 Начало создания релиза"
         run: |
           echo "═══════════════════════════════════════════"
           echo "🎉 ШАГ 8: СОЗДАНИЕ РЕЛИЗА"
           echo "═══════════════════════════════════════════"
-          echo "🆔 Run ID: ${{ github.event.workflow_run.id }}"
-          echo "📊 Статус предыдущего шага: ✅ Успешно"
-
+          
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
+          
       - name: "📦 Получение версии"
-        id: get_version
+        id: version
         run: |
           VERSION=$(cat VERSION 2>/dev/null || echo "0.1.0")
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "📦 Версия релиза: v$VERSION"
-
-      - name: "📝 Получение последних коммитов"
-        id: commits
+          
+      - name: "📝 Получение изменений"
+        id: changes
         run: |
-          # Получаем последние коммиты
-          COMMITS=$(git log -5 --pretty=format:"- %s (%h)" --abbrev-commit)
-          echo "commits<<EOF" >> $GITHUB_OUTPUT
-          echo "$COMMITS" >> $GITHUB_OUTPUT
+          # Получаем последние 10 коммитов
+          CHANGES=$(git log -10 --pretty=format:"- %s" --abbrev-commit)
+          echo "changes<<EOF" >> $GITHUB_OUTPUT
+          echo "$CHANGES" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
-
+          
       - name: "📄 Подготовка описания"
         run: |
           cat > release_notes.md << EOF
-          ## 🎉 Release v${{ steps.get_version.outputs.version }}
+          ## 🎉 Release v${{ steps.version.outputs.version }}
           
-          ### 📦 Информация о релизе
+          ### 📦 Информация
           - **Дата:** $(date +"%d.%m.%Y %H:%M")
           - **Ветка:** main
           - **Коммит:** ${{ github.sha }}
           
-          ### 📝 Последние изменения
-          ### gegre
-          ${{ steps.commits.outputs.commits }}
+          ### 📝 Изменения
+          ${{ steps.changes.outputs.changes }}
           
-          ### 🐳 Docker образы
+          ### 🐳 Docker
           \`\`\`bash
-          # Docker Hub
-          docker pull ${{ github.repository_owner }}/$(basename ${{ github.repository }}):v${{ steps.get_version.outputs.version }}
-          
-          # GitHub Container Registry
-          docker pull ghcr.io/${{ github.repository }}:v${{ steps.get_version.outputs.version }}
+          docker pull ${{ github.repository_owner }}/$(basename ${{ github.repository }}):v${{ steps.version.outputs.version }}
           \`\`\`
           EOF
           
-          echo "✅ Описание релиза готово"
-          echo ""
-          echo "📋 Превью:"
-          cat release_notes.md
-
+          echo "✅ Описание готово"
+          
       - name: "🎉 Создание релиза"
         id: create_release
         uses: actions/create-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tag_name: v${{ steps.get_version.outputs.version }}
-          release_name: Release v${{ steps.get_version.outputs.version }}
+          tag_name: v${{ steps.version.outputs.version }}
+          release_name: Release v${{ steps.version.outputs.version }}
           body_path: release_notes.md
           draft: false
           prerelease: false
-          # Добавляем changelog
-      - name: "📊 Результат"
+          
+      - name: "✅ Завершение"
         run: |
           echo "═══════════════════════════════════════════"
-          echo "✅ ШАГ 8 ЗАВЕРШЕН"
+          echo "🎉 ШАГ 8 ЗАВЕРШЕН"
           echo "═══════════════════════════════════════════"
-          echo "🎉 Релиз создан: v${{ steps.get_version.outputs.version }}"
+          echo "📦 Релиз: v${{ steps.version.outputs.version }}"
           echo "🔗 Ссылка: ${{ steps.create_release.outputs.url }}"
           echo ""
-          echo "📋 Все шаги выполнены успешно! 🚀"
+          echo "✨ Все 8 шагов выполнены успешно! ✨"
