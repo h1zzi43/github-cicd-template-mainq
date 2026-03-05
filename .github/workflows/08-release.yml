@@ -85,7 +85,7 @@ jobs:
           body_path: release_notes.md
           draft: false
           prerelease: false
-
+          # Добавляем changelog
       - name: "📊 Результат"
         run: |
           echo "═══════════════════════════════════════════"
