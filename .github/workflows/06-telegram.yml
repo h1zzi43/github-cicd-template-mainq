@@ -63,7 +63,7 @@ jobs:
           VERSION="${{ steps.get_version.outputs.version }}"
           REPO="${{ github.repository }}"
           RUN_ID="${{ github.event.workflow_run.id }}"
-          
+            ### gegre
           # Формируем сообщение
           cat > message.md << EOF
           🎉 **Новый релиз v${VERSION}!**
