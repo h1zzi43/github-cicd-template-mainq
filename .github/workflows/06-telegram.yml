@@ -9,7 +9,7 @@ on:
     branches:
       - main
       - master
-
+      - dev
 # Добавляем права на чтение
 permissions:
   contents: read
