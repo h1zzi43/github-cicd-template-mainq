@@ -134,7 +134,7 @@ jobs:
             } catch (error) {
               console.log(`⚠️ Ошибка: ${error.message}`);
             }
-
+              ### gegre
       - name: "📊 Итог"
         run: |
           echo "═══════════════════════════════════════════"
